@@ -147,16 +147,16 @@ def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
     # 💡 Estratégia de Abordagem Comercial — {lead.get('nome_fantasia') or lead.get('razao_social')}
 
     ## 🎯 1. O Gancho de Abertura (Cold Call)
-    [Gere um roteiro exato de no máximo 3 frases focado em falar direto com os `{lead.get('decisores_principais')}`. ADAPTE O TOM DE VOZ com base na Faixa Etária dos sócios: Se forem acima de 50 anos, use um tom mais formal e focado em sucessão/segurança patrimonial; se forem mais jovens, um tom mais dinâmico, focado em agilidade, custo e inovação.]
+    [Gere um roteiro exato de no máximo 3 frases focado em falar direto com os `{lead.get('decisores_principais')}`. ADAPTE O TOM DE VOZ com base na Faixa Etária dos sócios: Se forem acima de 50 anos, use um tom mais formal e focado em Plano de Saúde, Plano de Vida Individual e Plano de Vida em Grupo; se forem mais jovens, um tom mais dinâmico, focado em agilidade, custo e inovação.]
 
     ## 💰 2. Argumentação de Impacto Financeiro
-    [Gere um argumento rápido conectando o regime `{lead.get('enquadramento_provavel')}` com o `{lead.get('gatilho_fiscal')}`.]
+    [Gere um argumento rápido conectando o regime `{lead.get('enquadramento_provavel')}` com o `{lead.get('gatilho_fiscal')} e Plano de Saúde, Plano de Vida Individual e Plano de Vida em Grupo`.]
 
     ## 🛡️ 3. Mapeamento de Riscos e Produtos
     [Indique em tópicos rápidos quais produtos oferecer com base na complexidade '{lead.get('complexidade_venda')}'.]
 
     ## ⚡ 4. Quebra de Objeção "Matadora"
-    [Uma resposta direta de 2 linhas para quando o decisor disser: "Já temos corretor".]
+    [Uma resposta direta de 2 linhas para quando o decisor disser: "Já temos corretor" ou "Já temos seguro".]
     """
 
     try:
