@@ -2,6 +2,7 @@ import re
 import pandas as pd
 from groq import Groq
 import streamlit as st
+import unicodedata
 
 def limpar_cnpj(cnpj_input: str) -> str:
     if not cnpj_input:
