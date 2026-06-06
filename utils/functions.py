@@ -130,7 +130,7 @@ def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
     prompt_contexto = f"""
     [DIRETRIZ DE MAX_TOKENS: Sua resposta completa NÃO PODE ultrapassar 500 tokens de saída. Seja extremamente direto, conciso e focado em conversão. Vá direto para os tópicos estruturais em Markdown.]
 
-    Você é um Diretor de Vendas B2B de Elite no Brasil.
+    Você é um Diretor de Vendas de Seguros B2B de Elite no Brasil, focado em Plano de Saúde, Plano de Vida Individual e Plano de Vida em Grupo.
     Sua missão é criar uma estratégia de ataque comercial ultra-sintética para abordar o lead abaixo.
 
     DADOS DO LEAD:
