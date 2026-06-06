@@ -131,37 +131,71 @@ def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
 
     lead = df.loc[num_cnpj]
     
+Aqui está o bloco de código do prompt totalmente ajustado e polido para focar estritamente nesses três produtos, trazendo um argumento de venda personalizado para cada um deles com base nas informações coletadas do lead.
+
+Também aproveitei para readequar as outras seções para garantir que todo o contexto da IA esteja girando em torno de Planos de Saúde e Seguros de Vida, mantendo a blindagem de codificação UTF-8 que aplicamos anteriormente:
+
+Python
+def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
+    """
+    Gera o pitch de vendas estratégico usando a API da Groq.
+    Trata erros de codificação ASCII forçando UTF-8 em todo o bloco de dados.
+    """
+    client = Groq(api_key=api_key)
+
+    if num_cnpj not in df.index:
+        return f"❌ Erro: O CNPJ {num_cnpj} não foi encontrado no DataFrame."
+
+    lead = df.loc[num_cnpj]
+    
+    # Extrai e limpa os dados do lead para garantir que nenhuma string quebre o encoding
+    razao_social = str(lead.get('razao_social', '')).encode('utf-8', 'ignore').decode('utf-8')
+    cnae_desc = str(lead.get('cnae_principal_descricao', '')).encode('utf-8', 'ignore').decode('utf-8')
+    porte = str(lead.get('porte', '')).encode('utf-8', 'ignore').decode('utf-8')
+    municipio = str(lead.get('municipio', '')).encode('utf-8', 'ignore').decode('utf-8')
+    gatilho = str(lead.get('gatilho_fiscal', '')).encode('utf-8', 'ignore').decode('utf-8')
+    enquadramento = str(lead.get('enquadramento_provavel', '')).encode('utf-8', 'ignore').decode('utf-8')
+    complexidade = str(lead.get('complexidade_venda', '')).encode('utf-8', 'ignore').decode('utf-8')
+    decisores = str(lead.get('decisores_principais', '')).encode('utf-8', 'ignore').decode('utf-8')
+    nome_fantasia = str(lead.get('nome_fantasia', '')).encode('utf-8', 'ignore').decode('utf-8') or razao_social
+    
+    # Converte a lista do QSA com segurança para string UTF-8
+    qsa_lista = str(lead.get('qsa', [])).encode('utf-8', 'ignore').decode('utf-8')
+
     prompt_contexto = f"""
     [DIRETRIZ DE MAX_TOKENS: Sua resposta completa NÃO PODE ultrapassar 500 tokens de saída. Seja extremamente direto, conciso e focado em conversão. Vá direto para os tópicos estruturais em Markdown. Elimine qualquer saudação ou introdução.]
 
-    Você é um Diretor de Vendas de Seguros B2B de Elite no Brasil, focado exclusivamente em fechar contratos de Plano de Saúde, Seguro de Vida Individual e Seguro de Vida em Grupo.
-    Sua missão é criar uma estratégia de abordagem comercial ultra-sintética para o lead abaixo.
+    Você é um Diretor de Vendas de Seguros B2B de Elite no Brasil, especialista em estruturar benefícios corporativos de alto impacto.
+    Sua missão é criar uma estratégia de abordagem comercial ultra-sintética para o lead abaixo, focando unicamente em Plano de Saúde, Seguro de Vida Individual e Seguro de Vida em Grupo.
 
     DADOS DO LEAD:
-    - Razão Social: {lead.get('razao_social')}
-    - Ramo de Atividade: {lead.get('cnae_principal_descricao')}
-    - Capital Social: R$ {lead.get('capital_social', 0.0):,.2f} | Porte: {lead.get('porte')}
-    - Gatilho Fiscal de Fechamento: {lead.get('gatilho_fiscal')}
-    - Regime Tributário Provável: {lead.get('enquadramento_provavel')}
-    - Idade da Empresa: {lead.get('idade_empresa_anos')} anos | Complexidade: {lead.get('complexidade_venda')}
-    - Decisores Principais a Chamar: {lead.get('decisores_principais')}
-    - PERFIL DOS SÓCIOS (IDADES): {lead.get('qsa')}
+    - Razão Social: {razao_social}
+    - Ramo de Atividade: {cnae_desc}
+    - Capital Social: R$ {lead.get('capital_social', 0.0):,.2f} | Porte: {porte}
+    - Gatilho Fiscal de Fechamento: {gatilho}
+    - Regime Tributário Provável: {enquadramento}
+    - Idade da Empresa: {lead.get('idade_empresa_anos', 0)} anos | Complexidade: {complexidade}
+    - Decisores Principais a Chamar: {decisores}
+    - PERFIL DOS SÓCIOS (IDADES): {qsa_lista}
 
     REQUISITOS DA SAÍDA (Gere estritamente em formato Markdown curto):
     
-    # 💡 Estratégia de Abordagem Comercial — {lead.get('nome_fantasia') or lead.get('razao_social')}
+    # 💡 Estratégia de Abordagem Comercial — {nome_fantasia}
 
     ## 🎯 1. O Gancho de Abertura (Cold Call)
-    Gere um roteiro exato de no máximo 3 frases focado em falar direto com os decisores mapeados para agendar uma reunião de diagnóstico de benefícios. ADAPTE O TOM DE VOZ com base na Faixa Etária dos sócios: Se forem acima de 50 anos, use um tom formal focado em blindagem patrimonial, sucessão societária via seguro de vida e retenção de diretores seniores via plano de saúde premium; se forem mais jovens, adote um tom dinâmico focado em atratividade de talentos no mercado, eficiência de custos nos benefícios e inovação digital em saúde corporativa.
+    Gere um roteiro exato de no máximo 3 frases focado em falar direto com os decisores mapeados para agendar uma reunião de diagnóstico de benefícios. ADAPTE O TOM DE VOZ com base na Faixa Etária dos sócios: Se forem acima de 50 anos, use um tom formal focado em blindagem patrimonial, sucessão societária estável e retenção de liderança sênior; se forem mais jovens, adote um tom dinâmico focado em atratividade de talentos no mercado, eficiência operacional e inovação digital em saúde corporativa.
 
     ## 💰 2. Argumentação de Impacto Financeiro
-    Gere um argumento rápido de 2 frases conectando o regime tributário provável do lead com o gatilho fiscal enviado. Destaque como a implementação ou revisão do Plano de Saúde e do Seguro de Vida em Grupo pode trazer retorno financeiro imediato (como a dedução fiscal no IRPJ se for Lucro Real) ou redução de sinistralidade e desperdício de caixa.
+    Gere um argumento rápido de 2 frases conectando o regime tributário provável do lead com o gatilho fiscal enviado. Destaque como a implementação ou revisão do Plano de Saúde ou do Seguro de Vida pode trazer retorno financeiro e otimização de caixa (como a dedução fiscal no IRPJ se for Lucro Real) ou redução de desperdício em apólices mal dimensionadas.
 
     ## 🛡️ 3. Mapeamento de Riscos e Produtos
-    Indique em tópicos rápidos (bullet points) qual deve ser a prioridade da oferta (Plano de Saúde, Seguro de Vida Individual para os sócios ou Seguro de Vida em Grupo para os colaboradores) com base na idade da empresa, capital social, porte e quantidade de sócios identificados.
+    Apresente obrigatoriamente APENAS os 3 produtos abaixo estruturados em bullet points rápidos. Para cada produto, crie um argumento de venda sob medida baseado nas informações coletadas (idade dos sócios, porte, capital social e tempo de mercado da empresa):
+    - **Plano de Saúde:** [Crie o argumento focado no perfil, porte e localização do lead]
+    - **Seguro de Vida Individual (para os Sócios):** [Crie o argumento focado na idade dos sócios e no capital social da empresa]
+    - **Seguro de Vida em Grupo (para Colaboradores):** [Crie o argumento focado no ramo de atividade, riscos operacionais ou convenção coletiva do setor]
 
     ## ⚡ 4. Quebra de Objeção "Matadora"
-    Uma resposta direta de no máximo 2 linhas para quando o decisor soltar a objeção: "Já temos corretor de seguros" ou "Nossos colaboradores já têm plano/seguro e estamos satisfeitos".
+    Uma resposta direta de no máximo 2 linhas para quando o decisor soltar a objeção: "Já temos corretor de seguros" ou "Nossos colaboradores já estão satisfeitos com o que têm".
     """
 
     # --- CORREÇÃO DO BUG DE ASCII PARA WINDOWS/NUVEM ---
