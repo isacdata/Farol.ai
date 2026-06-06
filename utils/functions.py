@@ -167,7 +167,16 @@ def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
     nome_fantasia = remover_acentos(lead.get('nome_fantasia', '')) or razao_social
     
     # Converte a lista do QSA removendo os acentos com segurança
-    qsa_lista = remover_acentos(str(lead.get('qsa', [])))
+    qsa_lista_limpa = remover_acentos(str(lead.get('qsa', [])))
+
+    qsa_bruto = qsa_lista_limpa
+    if isinstance(qsa_bruto, list):
+        qsa_limitado = qsa_bruto[:5] # <-- Corta nos 5 primeiros e descarta o resto pesado
+        if len(qsa_bruto) > 5:
+            qsa_limitado.append({"nome_socio": f"...e mais {len(qsa_bruto) - 5} diretores corporativos", "qualificacao_socio": "Board"})
+        qsa_lista = remover_acentos(str(qsa_limitado))
+    else:
+        qsa_lista = remover_acentos(str(qsa_bruto))[:300]
 
     prompt_contexto = f"""
     [DIRETRIZ DE MAX_TOKENS: Sua resposta completa NAO PODE ultrapassar 500 tokens de saida. Seja extremamente direto, conciso e focado em conversao. Va direto para os topicos estruturais em Markdown. Elimine qualquer saudacao ou introducao.]
