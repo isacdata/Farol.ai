@@ -179,40 +179,40 @@ def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
         qsa_lista = remover_acentos(str(qsa_bruto))[:300]
 
     prompt_contexto = f"""
-    [DIRETRIZ DE MAX_TOKENS: Sua resposta completa NAO PODE ultrapassar 500 tokens de saida. Seja extremamente direto, conciso e focado em conversao. Va direto para os topicos estruturais em Markdown. Elimine qualquer saudacao ou introducao.]
+    [DIRETRIZ DE MAX_TOKENS: Sua resposta completa NAO PODE ultrapassar 500 tokens de saida. Seja extremamente direto, conciso, focado em conversao e sem enrolacao. Va direto para os topicos estruturais em Markdown. Elimine qualquer saudacao, introducao ou consideracoes finais.]
 
-    Voce e um Diretor de Vendas de Seguros B2B de Elite no Brasil, especialista em estruturar beneficios corporativos de alto impacto.
-    Sua missao e criar uma estrategia de abordagem comercial ultra-sintetica para o lead abaixo, focando unicamente em Plano de Saude, Seguro de Vida Individual e Seguro de Vida em Grupo.
+    Voce e um Diretor de Vendas de Seguros B2B especialista em fechar grandes contas corporativas no mercado brasileiro.
+    Sua missao e analisar os dados frios do lead e gerar um roteiro de ataque comercial exato e sem termos genericos, focado unicamente em Plano de Saude, Seguro de Vida Individual e Seguro de Vida em Grupo.
 
     DADOS DO LEAD:
     - Razao Social: {razao_social}
-    - Ramo de Atividade: {cnae_desc}
+    - Ramo de Atividade (CNAE): {cnae_desc}
     - Capital Social: R$ {lead.get('capital_social', 0.0):,.2f} | Porte: {porte}
     - Gatilho Fiscal de Fechamento: {gatilho}
     - Regime Tributario Provavel: {enquadramento}
-    - Idade da Empresa: {lead.get('idade_empresa_anos', 0)} anos | Complexidade: {complexidade}
-    - Decisores Principais a Chamar: {decisores}
-    - PERFIL DOS SOCIOS (IDADES): {qsa_lista}
+    - Idade da Empresa: {lead.get('idade_empresa_anos', 0)} anos | Complexidade de Venda: {complexidade}
+    - Decisores Principais (Contatar): {decisores}
+    - Perfil e Idade dos Socios (QSA): {qsa_lista}
 
-    REQUISITOS DA SAIDA (Gere estritamente em formato Markdown curto):
+    REQUISITOS DA SAIDA (Gere estritamente neste formato Markdown curto):
     
-    #  Estrategia de Abordagem Comercial — {nome_fantasia}
+    # 💡 Estratégia de Abordagem Comercial — {nome_fantasia}
 
-    ##  1. O Gancho de Abertura (Cold Call)
-    Gere um roteiro exato de no maximo 3 frases focado em falar direto com os decisores mapeados para agendar uma reuniao de diagnostico de beneficios. ADAPTE O TOM DE VOZ com base na Faixa Etaria dos socios: Se forem acima de 50 anos, use um tom formal focado em blindagem patrimonial, sucessao societaria estavel e retencao de lideranca senior; se forem mais jovens, adote um tom dinamico focado em atratividade de talentos no mercado, eficiencia operacional e inovacao digital em saude corporativa.
+    ## 🎯 1. Roteiro Pronto para Cold Call (Maximo 3 frases)
+    [Gere o texto exato da ligacao. Fale direto com o decisor '{decisores}' usando os '{lead.get('idade_empresa_anos', 0)}' anos de mercado da empresa como autoridade. Se o QSA indicar socios acima de 50 anos, use um tom estritamente formal focado em sucessao corporativa e governanca. Se forem mais jovens, seja dinamico e foque em ganho de eficiencia.]
 
-    ##  2. Argumentacao de Impacto Financeiro
-    Gere um argumento rapido de 2 frases conectando o regime tributario provavel do lead com o gatilho fiscal enviado. Destaque como a implementacao ou revisao do Plano de Saude ou do Seguro de Vida pode trazer retorno financeiro e otimizacao de caixa (como a deducao fiscal no IRPJ se for Lucro Real) ou reducao de desperdicio em apolices mal dimensionadas.
+    ## 💰 2. Argumentacao Financeira Direta (Maximo 2 frases)
+    [Gere o argumento exato para abrir os olhos do Diretor Financeiro. Conecte obrigatoriamente o regime '{enquadramento}' com o gatilho '{gatilho}'. Se for Lucro Real, cite textualmente o beneficio da deducao integral das apolices de Saude/Vida como despesa operacional no IRPJ. Se for Simples Nacional, foque na reducao imediata de desperdicios de caixa face ao faturamento.]
 
-    ##  3. Mapeamento de Riscos e Produtos
-    Apresente obrigatoriamente APENAS os 3 produtos abaixo estruturados em bullet points rapidos. Para cada produto, crie um argumento de venda sob medida baseado nas informacoes coletadas (idade dos socios, porte, capital social e tempo de mercado da empresa):
-    - **Plano de Saude:** [Crie o argumento focado no perfil, porte e localizacao do lead]
-    - **Seguro de Vida Individual (para os Socios):** [Crie o argumento focado na idade dos socios e no capital social da empresa]
-    - **Seguro de Vida em Grupo (para Colaboradores):** [Crie o argumento focado no ramo de atividade, riscos operacionais ou convencao coletiva do setor]
+    ## 🛡️ 3. Mapeamento de Riscos e Produtos (Apenas os 3 abaixo, sem inventar outros)
+    * **Plano de Saude:** [Gere 1 argumento focado estritamente em atrair e reter talentos para este porte '{porte}' e regiao '{municipio}', contrapondo a sinistralidade do mercado.]
+    * **Seguro de Vida Individual (para os Socios):** [Gere 1 argumento de blindagem societaria focado no Capital Social de R$ {lead.get('capital_social', 0.0):,.2f} e na idade real dos socios trazida no QSA '{qsa_lista}', mostrando o risco de inventario travando a operacao.]
+    * **Seguro de Vida em Grupo (para Colaboradores):** [Gere 1 argumento de protecao juridica para a empresa focado nos riscos operacionais diretos do ramo '{cnae_desc}', mencionando o cumprimento obrigatorio de Convencoes Coletivas (CCT) do setor.]
 
-    ##  4. Quebra de Objecao "Matadora"
-    Uma resposta direta de no maximo 2 linhas para quando o decisor soltar a objecao: "Ja temos corretor de seguros" ou "Nossos colaboradores ja estao satisfeitos com o que tem".
+    ## ⚡ 4. Quebra de Objecao "Matadora" (No maximo 2 linhas)
+    [Gere uma resposta em formato de pergunta de alto impacto para desarmar o cliente quando ele disser: "Ja temos corretor de seguros" ou "Nossos colaboradores ja estao satisfeitos com o plano atual".]
     """
+
 
     # Força a limpeza final do prompt inteiro em ASCII puro e seguro para transporte de pacotes
     prompt_final = prompt_contexto.encode('ascii', errors='ignore').decode('ascii')
