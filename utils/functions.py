@@ -131,15 +131,22 @@ def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
 
     lead = df.loc[num_cnpj]
     
-Aqui está o bloco de código do prompt totalmente ajustado e polido para focar estritamente nesses três produtos, trazendo um argumento de venda personalizado para cada um deles com base nas informações coletadas do lead.
+def remover_acentos(texto: str) -> str:
+    """
+    Remove acentos e caracteres especiais de uma string, 
+    transformando 'á' em 'a', 'ç' em 'c', etc. Blindagem total para ASCII.
+    """
+    if not texto:
+        return ""
+    # Normaliza para decompor os caracteres (ex: 'á' vira 'a' + '´')
+    nfkd_form = unicodedata.normalize('NFKD', str(texto))
+    # Filtra mantendo apenas os caracteres que pertencem ao padrão ASCII comum
+    return "".join([c for c in nfkd_form if not unicodedata.combining(c)])
 
-Também aproveitei para readequar as outras seções para garantir que todo o contexto da IA esteja girando em torno de Planos de Saúde e Seguros de Vida, mantendo a blindagem de codificação UTF-8 que aplicamos anteriormente:
-
-Python
 def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
     """
     Gera o pitch de vendas estratégico usando a API da Groq.
-    Trata erros de codificação ASCII forçando UTF-8 em todo o bloco de dados.
+    Normaliza os dados para remover acentos antes do envio, evitando erros de codec ASCII no Windows.
     """
     client = Groq(api_key=api_key)
 
@@ -148,64 +155,63 @@ def gerar_pitch_ia(df: pd.DataFrame, api_key: str, num_cnpj: str) -> str:
 
     lead = df.loc[num_cnpj]
     
-    # Extrai e limpa os dados do lead para garantir que nenhuma string quebre o encoding
-    razao_social = str(lead.get('razao_social', '')).encode('utf-8', 'ignore').decode('utf-8')
-    cnae_desc = str(lead.get('cnae_principal_descricao', '')).encode('utf-8', 'ignore').decode('utf-8')
-    porte = str(lead.get('porte', '')).encode('utf-8', 'ignore').decode('utf-8')
-    municipio = str(lead.get('municipio', '')).encode('utf-8', 'ignore').decode('utf-8')
-    gatilho = str(lead.get('gatilho_fiscal', '')).encode('utf-8', 'ignore').decode('utf-8')
-    enquadramento = str(lead.get('enquadramento_provavel', '')).encode('utf-8', 'ignore').decode('utf-8')
-    complexidade = str(lead.get('complexidade_venda', '')).encode('utf-8', 'ignore').decode('utf-8')
-    decisores = str(lead.get('decisores_principais', '')).encode('utf-8', 'ignore').decode('utf-8')
-    nome_fantasia = str(lead.get('nome_fantasia', '')).encode('utf-8', 'ignore').decode('utf-8') or razao_social
+    # Extrai, limpa e REMOVE OS ACENTOS de todos os dados textuais que vão para o prompt
+    razao_social = remover_acentos(lead.get('razao_social', ''))
+    cnae_desc = remover_acentos(lead.get('cnae_principal_descricao', ''))
+    porte = remover_acentos(lead.get('porte', ''))
+    municipio = remover_acentos(lead.get('municipio', ''))
+    gatilho = remover_acentos(lead.get('gatilho_fiscal', ''))
+    enquadramento = remover_acentos(lead.get('enquadramento_provavel', ''))
+    complexidade = remover_acentos(lead.get('complexidade_venda', ''))
+    decisores = remover_acentos(lead.get('decisores_principais', ''))
+    nome_fantasia = remover_acentos(lead.get('nome_fantasia', '')) or razao_social
     
-    # Converte a lista do QSA com segurança para string UTF-8
-    qsa_lista = str(lead.get('qsa', [])).encode('utf-8', 'ignore').decode('utf-8')
+    # Converte a lista do QSA removendo os acentos com segurança
+    qsa_lista = remover_acentos(str(lead.get('qsa', [])))
 
     prompt_contexto = f"""
-    [DIRETRIZ DE MAX_TOKENS: Sua resposta completa NÃO PODE ultrapassar 500 tokens de saída. Seja extremamente direto, conciso e focado em conversão. Vá direto para os tópicos estruturais em Markdown. Elimine qualquer saudação ou introdução.]
+    [DIRETRIZ DE MAX_TOKENS: Sua resposta completa NAO PODE ultrapassar 500 tokens de saida. Seja extremamente direto, conciso e focado em conversao. Va direto para os topicos estruturais em Markdown. Elimine qualquer saudacao ou introducao.]
 
-    Você é um Diretor de Vendas de Seguros B2B de Elite no Brasil, especialista em estruturar benefícios corporativos de alto impacto.
-    Sua missão é criar uma estratégia de abordagem comercial ultra-sintética para o lead abaixo, focando unicamente em Plano de Saúde, Seguro de Vida Individual e Seguro de Vida em Grupo.
+    Voce e um Diretor de Vendas de Seguros B2B de Elite no Brasil, especialista em estruturar beneficios corporativos de alto impacto.
+    Sua missao e criar uma estrategia de abordagem comercial ultra-sintetica para o lead abaixo, focando unicamente em Plano de Saude, Seguro de Vida Individual e Seguro de Vida em Grupo.
 
     DADOS DO LEAD:
-    - Razão Social: {razao_social}
+    - Razao Social: {razao_social}
     - Ramo de Atividade: {cnae_desc}
     - Capital Social: R$ {lead.get('capital_social', 0.0):,.2f} | Porte: {porte}
     - Gatilho Fiscal de Fechamento: {gatilho}
-    - Regime Tributário Provável: {enquadramento}
+    - Regime Tributario Provavel: {enquadramento}
     - Idade da Empresa: {lead.get('idade_empresa_anos', 0)} anos | Complexidade: {complexidade}
     - Decisores Principais a Chamar: {decisores}
-    - PERFIL DOS SÓCIOS (IDADES): {qsa_lista}
+    - PERFIL DOS SOCIOS (IDADES): {qsa_lista}
 
-    REQUISITOS DA SAÍDA (Gere estritamente em formato Markdown curto):
+    REQUISITOS DA SAIDA (Gere estritamente em formato Markdown curto):
     
-    # 💡 Estratégia de Abordagem Comercial — {nome_fantasia}
+    #  Estrategia de Abordagem Comercial — {nome_fantasia}
 
-    ## 🎯 1. O Gancho de Abertura (Cold Call)
-    Gere um roteiro exato de no máximo 3 frases focado em falar direto com os decisores mapeados para agendar uma reunião de diagnóstico de benefícios. ADAPTE O TOM DE VOZ com base na Faixa Etária dos sócios: Se forem acima de 50 anos, use um tom formal focado em blindagem patrimonial, sucessão societária estável e retenção de liderança sênior; se forem mais jovens, adote um tom dinâmico focado em atratividade de talentos no mercado, eficiência operacional e inovação digital em saúde corporativa.
+    ##  1. O Gancho de Abertura (Cold Call)
+    Gere um roteiro exato de no maximo 3 frases focado em falar direto com os decisores mapeados para agendar uma reuniao de diagnostico de beneficios. ADAPTE O TOM DE VOZ com base na Faixa Etaria dos socios: Se forem acima de 50 anos, use um tom formal focado em blindagem patrimonial, sucessao societaria estavel e retencao de lideranca senior; se forem mais jovens, adote um tom dinamico focado em atratividade de talentos no mercado, eficiencia operacional e inovacao digital em saude corporativa.
 
-    ## 💰 2. Argumentação de Impacto Financeiro
-    Gere um argumento rápido de 2 frases conectando o regime tributário provável do lead com o gatilho fiscal enviado. Destaque como a implementação ou revisão do Plano de Saúde ou do Seguro de Vida pode trazer retorno financeiro e otimização de caixa (como a dedução fiscal no IRPJ se for Lucro Real) ou redução de desperdício em apólices mal dimensionadas.
+    ##  2. Argumentacao de Impacto Financeiro
+    Gere um argumento rapido de 2 frases conectando o regime tributario provavel do lead com o gatilho fiscal enviado. Destaque como a implementacao ou revisao do Plano de Saude ou do Seguro de Vida pode trazer retorno financeiro e otimizacao de caixa (como a deducao fiscal no IRPJ se for Lucro Real) ou reducao de desperdicio em apolices mal dimensionadas.
 
-    ## 🛡️ 3. Mapeamento de Riscos e Produtos
-    Apresente obrigatoriamente APENAS os 3 produtos abaixo estruturados em bullet points rápidos. Para cada produto, crie um argumento de venda sob medida baseado nas informações coletadas (idade dos sócios, porte, capital social e tempo de mercado da empresa):
-    - **Plano de Saúde:** [Crie o argumento focado no perfil, porte e localização do lead]
-    - **Seguro de Vida Individual (para os Sócios):** [Crie o argumento focado na idade dos sócios e no capital social da empresa]
-    - **Seguro de Vida em Grupo (para Colaboradores):** [Crie o argumento focado no ramo de atividade, riscos operacionais ou convenção coletiva do setor]
+    ##  3. Mapeamento de Riscos e Produtos
+    Apresente obrigatoriamente APENAS os 3 produtos abaixo estruturados em bullet points rapidos. Para cada produto, crie um argumento de venda sob medida baseado nas informacoes coletadas (idade dos socios, porte, capital social e tempo de mercado da empresa):
+    - **Plano de Saude:** [Crie o argumento focado no perfil, porte e localizacao do lead]
+    - **Seguro de Vida Individual (para os Socios):** [Crie o argumento focado na idade dos socios e no capital social da empresa]
+    - **Seguro de Vida em Grupo (para Colaboradores):** [Crie o argumento focado no ramo de atividade, riscos operacionais ou convencao coletiva do setor]
 
-    ## ⚡ 4. Quebra de Objeção "Matadora"
-    Uma resposta direta de no máximo 2 linhas para quando o decisor soltar a objeção: "Já temos corretor de seguros" ou "Nossos colaboradores já estão satisfeitos com o que têm".
+    ##  4. Quebra de Objecao "Matadora"
+    Uma resposta direta de no maximo 2 linhas para quando o decisor soltar a objecao: "Ja temos corretor de seguros" ou "Nossos colaboradores ja estao satisfeitos com o que tem".
     """
 
-    # --- CORREÇÃO DO BUG DE ASCII PARA WINDOWS/NUVEM ---
-    # Normaliza a string do prompt para UTF-8 puro, ignorando caracteres fantasmas
-    prompt_normalizado = prompt_contexto.encode('utf-8', errors='ignore').decode('utf-8')
+    # Força a limpeza final do prompt inteiro em ASCII puro e seguro para transporte de pacotes
+    prompt_final = prompt_contexto.encode('ascii', errors='ignore').decode('ascii')
 
     try:
         completion = client.chat.completions.create(
             model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt_normalizado}], # Usando o prompt normalizado
+            messages=[{"role": "user", "content": prompt_final}],
             temperature=0.1,
             max_tokens=500,
             top_p=0.9,
