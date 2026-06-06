@@ -1,19 +1,17 @@
 import sys
 import os
-import time
-from groq import Groq
 
-# Adiciona a raiz do projeto ao PATH do Python para ele enxergar a pasta 'utils'
+# Força a raiz do Farol.ai ser a prioridade número 1 de leitura do Python
 diretorio_atual = os.path.dirname(os.path.abspath(__file__))
 raiz_projeto = os.path.abspath(os.path.join(diretorio_atual, ".."))
 if raiz_projeto not in sys.path:
-    sys.path.append(raiz_projeto)
+    sys.path.insert(0, raiz_projeto) # <-- A mágica da prioridade acontece no insert(0)
 
+from groq import Groq
 import streamlit as st
 import pandas as pd
 from datetime import datetime
 
-# CORREÇÃO: Importando a função unificada com fallback integrado
 from utils.extractions_apis import buscar_dados_cnpj
 from utils.functions import (
     limpar_cnpj,
@@ -23,23 +21,23 @@ from utils.functions import (
     gerar_pitch_ia
 )
 
-# -----------------------------------------------------------------------------
-# CONFIGURAÇÃO DA PÁGINA STREAMLIT
-# -----------------------------------------------------------------------------
 st.set_page_config(
     page_title="Farol.ai — Sales Intelligence",
     page_icon="💡",
     layout="wide"
 )
 
-# -----------------------------------------------------------------------------
-# MOTOR DE MÉTRICAS DE NEGÓCIO
-# -----------------------------------------------------------------------------
 def calcular_metricas_venda(dados_api: dict) -> dict:
     metricas = {}
+    
+    # Proteção de parsing de data
     try:
-        dt_abertura = datetime.strptime(dados_api.get("data_inicio_atividade", ""), "%Y-%m-%d")
-        metricas["idade_empresa_anos"] = datetime.now().year - dt_abertura.year
+        dt_string = dados_api.get("data_inicio_atividade", "")
+        if dt_string:
+            dt_abertura = datetime.strptime(dt_string, "%Y-%m-%d")
+            metricas["idade_empresa_anos"] = datetime.now().year - dt_abertura.year
+        else:
+            metricas["idade_empresa_anos"] = 0
     except Exception:
         metricas["idade_empresa_anos"] = 0
 
@@ -48,7 +46,7 @@ def calcular_metricas_venda(dados_api: dict) -> dict:
     
     if any(termo in razao_social for termo in ["ASSOCIACAO", "INSTITUTO", "COMUNIDADE", "IGREJA", "FUNDACAO"]):
         metricas["enquadramento_provavel"] = "Imune / Isenta (Sem Fins Lucrativos)"
-        metricas["gatilho_fiscal"] = "Foco em Proteção Patrimonial, Responsabilidade Civil para Diretores e Planos Coletivos por Adesão."
+        metricas["gatilho_fiscal"] = "Foco em Proteção Patrimonial, Responsabilidade Civil e Planos por Adesão."
     elif "MICRO" in porte or porte == "1":
         metricas["enquadramento_provavel"] = "Simples Nacional"
         metricas["gatilho_fiscal"] = "Foco em Custo por Vida baixo e tabelas PME para retenção."
@@ -57,7 +55,7 @@ def calcular_metricas_venda(dados_api: dict) -> dict:
         metricas["gatilho_fiscal"] = "Apresentar tabelas PME corporativas com carência reduzida."
     else:
         metricas["enquadramento_provavel"] = "Lucro Real ou Presumido (Grande Porte)"
-        metricas["gatilho_fiscal"] = "GATILHO DE OURO: Dedução integral do valor do benefício como Despesa Operacional no IRPJ!"
+        metricas["gatilho_fiscal"] = "GATILHO DE OURO: Dedução integral do valor do benefício no IRPJ!"
 
     situacao = str(dados_api.get("descricao_situacao_cadastral", "")).upper()
     if "ATIVA" in situacao:
@@ -80,9 +78,6 @@ def calcular_metricas_venda(dados_api: dict) -> dict:
 
     return metricas
 
-# -----------------------------------------------------------------------------
-# INTERFACE GRÁFICA PRINCIPAL
-# -----------------------------------------------------------------------------
 st.title("💡 Farol.ai — Inteligência de Vendas B2B")
 st.markdown("Busque CNPJs, analise a saúde fiscal e gere argumentos de impacto instantâneos.")
 st.write("---")
@@ -91,15 +86,12 @@ with st.sidebar:
     st.header("🔑 Configurações do Sistema")
     
     api_key_default = ""
-    
-    # 1. Tenta o método nativo do Streamlit
     try:
         if "GROQ_API_KEY" in st.secrets:
             api_key_default = st.secrets["GROQ_API_KEY"]
     except Exception:
         pass
         
-    # 2. SE O NATIVO FALHAR (Bug do Windows): Força a leitura manual do arquivo
     if not api_key_default:
         try:
             caminho_manual = os.path.normpath(os.path.join(raiz_projeto, ".streamlit", "secrets.toml"))
@@ -115,7 +107,7 @@ with st.sidebar:
     st.markdown("---")
     st.info("⚡ Motor Atual: Llama 3.1 8B Instant")
 
-cnpj_usuario = st.text_input("Digite o CNPJ da Empresa (com ou sem formatação):", placeholder="00.000.000/0000-00")
+cnpj_usuario = st.text_input("Digite o CNPJ da Empresa:", placeholder="00.000.000/0000-00")
 
 if st.button("💡 Acender o Farol", type="primary"):
     cnpj_limpo = limpar_cnpj(cnpj_usuario)
@@ -127,29 +119,16 @@ if st.button("💡 Acender o Farol", type="primary"):
     else:
         dados_brutos = None
         
-        # CORREÇÃO: Fluxo de chamada robusto com o fallback invisível que criamos
+        # A Mágica Acontece Aqui: 3 APIs tentam buscar o dado silenciosamente
         try:
-            with st.spinner("🔍 Mapeando ecossistema de dados do lead..."):
+            with st.spinner("🔍 Varrendo ecossistema corporativo (Tentando 3 bases de dados)..."):
                 dados_brutos = buscar_dados_cnpj(cnpj_limpo)
-        except (ConnectionError, Exception) as e:
-            st.warning("⚠️ Instabilidade temporária nos servidores de consulta!")
-            
-            # Cronômetro visual preventivo de 1 minuto antes do re-clique
-            aviso_tempo = st.empty()
-            for segundos_restantes in range(60, 0, -1):
-                minutos = segundos_restantes // 60
-                segundos = segundos_restantes % 60
-                aviso_tempo.info(f"⏳ Janela de requisições saturada. Próxima tentativa automática em **{minutos:02d}:{segundos:02d}**.")
-                time.sleep(1)
-            aviso_tempo.empty()
-            
-            try:
-                with st.spinner("🔄 Acionando varredura secundária de contingência..."):
-                    dados_brutos = buscar_dados_cnpj(cnpj_limpo)
-            except Exception as erro_fatal:
-                st.error(f"❌ Não foi possível obter os dados das bases públicas. Motivo: {erro_fatal}")
+                # Mostra no cantinho da tela qual API salvou a pátria
+                st.toast(f"✅ Dados obtidos via {dados_brutos.get('fonte', 'API')}", icon="📡")
+        except Exception as e:
+            st.error(f"❌ Nenhuma base pública respondeu. Detalhes: {e}")
+            st.stop()
         
-        # Execução das regras de negócio e renderização da tela
         if dados_brutos:
             try:
                 metricas_calculadas = calcular_metricas_venda(dados_brutos)
@@ -173,4 +152,4 @@ if st.button("💡 Acender o Farol", type="primary"):
                         st.markdown(pitch_markdown)
                     
             except Exception as e:
-                st.error(f"❌ Ocorreu um erro no processamento dos dados: {str(e)}")
+                st.error(f"❌ Ocorreu um erro na plotagem dos dados: {str(e)}")

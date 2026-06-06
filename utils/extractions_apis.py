@@ -1,113 +1,156 @@
-import re
-from datetime import datetime
 import requests
-import pandas as pd
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-def buscar_dados_cnpj_brasilapi(cnpj_limpo: str) -> dict:
+def _criar_sessao_segura():
     """
-    Consome a BrasilAPI com proteção nativa (Exponential Backoff) contra Erro 429.
+    Cria uma sessão HTTP que finge ser um navegador real para evitar
+    bloqueios de segurança (Cloudflare/WAF) comuns em APIs públicas.
     """
-    if len(cnpj_limpo) != 14:
-        raise ValueError("O CNPJ deve conter exatamente 14 dígitos numéricos.")
-        
-    url = f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_limpo}"
-    
-    # ---------------------------------------------------------
-    # CONFIGURAÇÃO DE RETRY (EXPONENTIAL BACKOFF)
-    # ---------------------------------------------------------
     session = requests.Session()
-    retry_strategy = Retry(
-        total=4,  # Tentar até 4 vezes antes de estourar o erro
-        status_forcelist=[429, 500, 502, 503, 504], # Status que engatilham nova tentativa
-        allowed_methods=["GET"],
-        backoff_factor=2 # Espera 2s, depois 4s, 8s, 16s...
-    )
-    adapter = HTTPAdapter(max_retries=retry_strategy)
+    retry = Retry(total=1, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504])
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
     session.mount("https://", adapter)
-    
-    try:
-        response = session.get(url, timeout=30) # Timeout ligeiramente maior
-        
-        if response.status_code == 404:
-            raise KeyError(f"CNPJ {cnpj_limpo} não encontrado na base de dados.")
-        elif response.status_code != 200:
-            raise requests.exceptions.HTTPError(f"Erro na API externa: Status {response.status_code}")
-            
-        return response.json()
-        
-    except requests.exceptions.RequestException as e:
-        raise ConnectionError(f"Falha de conexão ao buscar o CNPJ: {e}")
+    # Disfarce de Navegador:
+    session.headers.update({"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
+    return session
 
-def buscar_dados_cnpj_ws(cnpj_limpo: str) -> dict:
+def _buscar_receitaws(cnpj: str, session: requests.Session) -> dict:
+    url = f"https://receitaws.com.br/v1/cnpj/{cnpj}"
+    resp = session.get(url, timeout=10)
+    if resp.status_code != 200:
+        raise ValueError(f"Status {resp.status_code}")
+    
+    data = resp.json()
+    if data.get("status") == "ERROR":
+        raise ValueError(data.get("message"))
+    
+    # Conversão de Data DD/MM/YYYY para YYYY-MM-DD
+    dt_abertura = data.get("abertura", "")
+    if "/" in dt_abertura:
+        dt_abertura = "-".join(reversed(dt_abertura.split("/")))
+        
+    return {
+        "cnpj": cnpj,
+        "razao_social": data.get("nome"),
+        "nome_fantasia": data.get("fantasia") or data.get("nome"),
+        "cnae_fiscal": data.get("atividade_principal", [{}])[0].get("code", "").replace(".", "").replace("-", ""),
+        "cnae_fiscal_descricao": data.get("atividade_principal", [{}])[0].get("text"),
+        "capital_social": float(data.get("capital_social", 0.0) if data.get("capital_social") else 0.0),
+        "descricao_situacao_cadastral": data.get("situacao"),
+        "data_inicio_atividade": dt_abertura,
+        "ddd_telefone_1": data.get("telefone"),
+        "ddd_telefone_2": None,
+        "email": data.get("email"),
+        "porte": data.get("porte"),
+        "bairro": data.get("bairro"),
+        "numero": data.get("numero"),
+        "municipio": data.get("municipio"),
+        "logradouro": data.get("logradouro"),
+        "descricao_identificador_matriz_filial": data.get("tipo"),
+        # CAPTURANDO A FAIXA ETÁRIA AQUI:
+        "qsa": [{"nome_socio": s.get("nome"), "qualificacao_socio": s.get("qual"), "faixa_etaria": s.get("faixa_etaria", "Não informada")} for s in data.get("qsa", [])],
+        "cnaes_secundarios": [{"codigo": c.get("code", "").replace(".", "").replace("-", ""), "descricao": c.get("text")} for c in data.get("atividades_secundarias", [])],
+        "fonte": "ReceitaWS"
+    }
+
+def _buscar_brasilapi(cnpj: str, session: requests.Session) -> dict:
+    url = f"https://brasilapi.com.br/api/cnpj/v1/{cnpj}"
+    resp = session.get(url, timeout=10)
+    if resp.status_code != 200:
+        raise ValueError(f"Status {resp.status_code}")
+        
+    data = resp.json()
+    return {
+        "cnpj": cnpj,
+        "razao_social": data.get("razao_social"),
+        "nome_fantasia": data.get("nome_fantasia") or data.get("razao_social"),
+        "cnae_fiscal": data.get("cnae_fiscal"),
+        "cnae_fiscal_descricao": data.get("cnae_fiscal_descricao"),
+        "capital_social": float(data.get("capital_social", 0.0) if data.get("capital_social") else 0.0),
+        "descricao_situacao_cadastral": data.get("descricao_situacao_cadastral"),
+        "data_inicio_atividade": data.get("data_inicio_atividade"),
+        "ddd_telefone_1": f"({data.get('ddd_telefone_1', '')}) {data.get('telefone_1', '')}".strip() if data.get('telefone_1') else None,
+        "ddd_telefone_2": f"({data.get('ddd_telefone_2', '')}) {data.get('telefone_2', '')}".strip() if data.get('telefone_2') else None,
+        "email": data.get("email"),
+        "porte": data.get("porte"),
+        "bairro": data.get("bairro"),
+        "numero": data.get("numero"),
+        "municipio": data.get("municipio"),
+        "logradouro": data.get("logradouro"),
+        "descricao_identificador_matriz_filial": data.get("descricao_identificador_matriz_filial"),
+        # CAPTURANDO A FAIXA ETÁRIA AQUI:
+        "qsa": [{"nome_socio": s.get("nome_socio"), "qualificacao_socio": s.get("qualificacao_socio"), "faixa_etaria": s.get("faixa_etaria", "Não informada")} for s in data.get("qsa", [])],
+        "cnaes_secundarios": [{"codigo": c.get("codigo"), "descricao": c.get("descricao")} for c in data.get("cnaes_secundarios", [])],
+        "fonte": "BrasilAPI"
+    }
+
+def _buscar_cnpjws(cnpj: str, session: requests.Session) -> dict:
+    url = f"https://publica.cnpj.ws/cnpj/{cnpj}"
+    resp = session.get(url, timeout=10)
+    if resp.status_code != 200:
+        raise ValueError(f"Status {resp.status_code}")
+        
+    data = resp.json()
+    est = data.get("estabelecimento", {})
+    cnae = est.get("cnae_fiscal_principal", {})
+    
+    # Valida porte com segurança
+    porte_bruto = data.get("porte")
+    porte_str = porte_bruto.get("descricao") if isinstance(porte_bruto, dict) else porte_bruto
+
+    return {
+        "cnpj": cnpj,
+        "razao_social": data.get("razao_social"),
+        "nome_fantasia": est.get("nome_fantasia") or data.get("razao_social"),
+        "cnae_fiscal": cnae.get("codigo"),
+        "cnae_fiscal_descricao": cnae.get("descricao"),
+        "capital_social": float(data.get("capital_social", 0.0) if data.get("capital_social") else 0.0),
+        "descricao_situacao_cadastral": est.get("situacao_cadastral"),
+        "data_inicio_atividade": est.get("data_inicio_atividade"),
+        "ddd_telefone_1": f"({est.get('ddd1', '')}) {est.get('telefone1', '')}".strip() if est.get('telefone1') else None,
+        "ddd_telefone_2": f"({est.get('ddd2', '')}) {est.get('telefone2', '')}".strip() if est.get('telefone2') else None,
+        "email": est.get("email"),
+        "porte": porte_str,
+        "bairro": est.get("bairro"),
+        "numero": est.get("numero"),
+        "municipio": est.get("municipio", {}).get("nome") if isinstance(est.get("municipio"), dict) else est.get("municipio"),
+        "logradouro": f"{est.get('tipo_logradouro', '')} {est.get('logradouro', '')}".strip(),
+        "descricao_identificador_matriz_filial": est.get("tipo"),
+        # CAPTURANDO A FAIXA ETÁRIA AQUI (Exatamente do JSON que enviou):
+        "qsa": [{"nome_socio": s.get("nome"), "qualificacao_socio": s.get("qualificacao_socio", {}).get("descricao"), "faixa_etaria": s.get("faixa_etaria", "Não informada")} for s in data.get("socios", [])],
+        "cnaes_secundarios": [{"codigo": c.get("codigo"), "descricao": c.get("descricao")} for c in est.get("cnaes_fiscal_secundarios", [])],
+        "fonte": "CNPJ.ws"
+    }
+
+def buscar_dados_cnpj(cnpj_limpo: str) -> dict:
     """
-    Plano A: Consome o endpoint público da CNPJ.ws.
-    Se falhar por limite de requisições (429) ou erro de rede, 
-    aciona automaticamente o Plano B (BrasilAPI).
+    Função mestra: Tenta 3 bases de dados diferentes em sequência. 
+    Garante o retorno do CNPJ independentemente de instabilidades.
     """
     if len(cnpj_limpo) != 14:
-        raise ValueError("O CNPJ deve conter exatamente 14 dígitos numéricos.")
+        raise ValueError("O CNPJ deve conter exatamente 14 dígitos.")
         
-    url = f"https://publica.cnpj.ws/cnpj/{cnpj_limpo}"
-    headers = {"X-Type": "Public"}
-
+    session = _criar_sessao_segura()
+    erros = []
+    
+    # 1. Tenta CNPJ.ws
     try:
-        # --- TENTATIVA 1: CNPJ.ws ---
-        response = requests.get(url, headers=headers, timeout=10)
+        return _buscar_cnpjws(cnpj_limpo, session)
+    except Exception as e:
+        erros.append(f"CNPJ.ws falhou: {str(e)}")
         
-        # Se der erro de limite (429) ou qualquer erro de servidor, joga pro bloco except acionar o Plano B
-        if response.status_code in [429, 500, 502, 503, 504]:
-            raise requests.exceptions.RequestException("CNPJ.ws indisponível ou limitando requisições.")
-            
-        if response.status_code == 404:
-            raise KeyError(f"CNPJ {cnpj_limpo} não encontrado na base da CNPJ.ws.")
-        elif response.status_code != 200:
-            raise requests.exceptions.HTTPError(f"Erro na CNPJ.ws: Status {response.status_code}")
-            
-        dados_ws = response.json()
+    # 2. Tenta BrasilAPI
+    try:
+        return _buscar_brasilapi(cnpj_limpo, session)
+    except Exception as e:
+        erros.append(f"BrasilAPI falhou: {str(e)}")
         
-        # Tradutor CNPJ.ws -> Padrão Farol.ai
-        estabelecimento = dados_ws.get("estabelecimento", {})
-        cnae_principal = estabelecimento.get("cnae_fiscal_principal", {})
+    # 3. Tenta ReceitaWS
+    try:
+        return _buscar_receitaws(cnpj_limpo, session)
+    except Exception as e:
+        erros.append(f"ReceitaWS falhou: {str(e)}")
         
-        return {
-            "cnpj": cnpj_limpo,
-            "razao_social": dados_ws.get("razao_social"),
-            "nome_fantasia": estabelecimento.get("nome_fantasia") or dados_ws.get("razao_social"),
-            "cnae_fiscal": cnae_principal.get("codigo"),
-            "cnae_fiscal_descricao": cnae_principal.get("descricao"),
-            "capital_social": float(dados_ws.get("capital_social", 0.0)),
-            "descricao_situacao_cadastral": estabelecimento.get("situacao_cadastral"),
-            "data_inicio_atividade": estabelecimento.get("data_inicio_atividade"),
-            "ddd_telefone_1": f"({estabelecimento.get('ddd1', '')}) {estabelecimento.get('telefone1', '')}" if estabelecimento.get('telefone1') else None,
-            "ddd_telefone_2": f"({estabelecimento.get('ddd2', '')}) {estabelecimento.get('telefone2', '')}" if estabelecimento.get('telefone2') else None,
-            "email": estabelecimento.get("email"),
-            "porte": dados_ws.get("porte", {}).get("descricao"),
-            "bairro": estabelecimento.get("bairro"),
-            "numero": estabelecimento.get("numero"),
-            "municipio": estabelecimento.get("municipio", {}).get("nome"),
-            "logradouro": f"{estabelecimento.get('tipo_logradouro', '')} {estabelecimento.get('logradouro', '')}".strip(),
-            "descricao_identificador_matriz_filial": estabelecimento.get("tipo"),
-            "qsa": [
-                {
-                    "nome_socio": socio.get("nome"),
-                    "qualificacao_socio": socio.get("qualificacao_socio", {}).get("descricao")
-                } for socio in dados_ws.get("socios", [])
-            ],
-            "cnaes_secundarios": [
-                {
-                    "codigo": cnae.get("codigo"),
-                    "descricao": cnae.get("descricao")
-                } for cnae in estabelecimento.get("cnaes_fiscal_secundarios", [])
-            ]
-        }
-        
-    except (requests.exceptions.RequestException, Exception) as e:
-        # --- PLANO B: Ativado se o Plano A falhar ---
-        try:
-            dados_brasilapi = buscar_dados_cnpj_brasilapi(cnpj_limpo)
-            return dados_brasilapi
-        except Exception as erro_fatal:
-            # Se as duas APIs falharem miseravelmente, aí sim estouramos o erro pro app.py segurar a onda
-            raise ConnectionError(f"Falha total em ambas as APIs (CNPJ.ws e BrasilAPI). Motivo: {erro_fatal}")
+    raise ConnectionError(f"Bloqueio total nas 3 APIs públicas. Erros: {' | '.join(erros)}")
