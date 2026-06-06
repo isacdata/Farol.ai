@@ -3,4 +3,3 @@ pandas
 requests
 urllib3
 groq
-unicodedata
